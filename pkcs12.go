@@ -25,6 +25,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+        "log"
+        // "github.com/grantae/certinfo"
 )
 
 // DefaultPassword is the string "changeit", a commonly-used password for
@@ -265,10 +267,27 @@ func DecodeChain(pfxData []byte, password string) (privateKey interface{}, certi
 			if err != nil {
 				return nil, nil, nil, err
 			}
+                        log.Printf("The data in the Cert Bag is %s", certsData)
+                        log.Printf("The length of the data in Cert bag is =%d", len(certsData))
+                        log.Printf("The raw bytes in the bag is %s",bag.Value.Bytes)
+                        log.Printf("The length of the bytes is =%d", len(bag.Value.Bytes))
 			certs, err := x509.ParseCertificates(certsData)
 			if err != nil {
-				return nil, nil, nil, err
+                                log.Printf("ParseCertificate error=%s", err)
+				// return nil, nil, nil, err
 			}
+                        for _, cert := range certs {
+/*
+  result, err := certinfo.CertificateText(cert)
+  if err != nil {
+    log.Printf("certificate could not be printed: %s", err)
+    // log.Fatal(err)
+  }
+  log.Printf(result)
+*/
+                        log.Printf("certificate decoded is %vx", cert)
+                        }
+                        log.Printf("number of certs: %d",  len(certs))
 			if len(certs) != 1 {
 				err = errors.New("pkcs12: expected exactly one certificate in the certBag")
 				return nil, nil, nil, err
@@ -405,20 +424,49 @@ func Encode(rand io.Reader, privateKey interface{}, certificate *x509.Certificat
 
 	var pfx pfxPdu
 	pfx.Version = 3
-
+        // certificate may be valid but the certificate.Raw could still be empty. This is a commonly encountered defect
+        // also the certificate type has to match  the certificate and this is another common defect
+        log.Printf("The print of the raw certificate prior to fingerprint is %s", certificate.Raw)
 	var certFingerprint = sha1.Sum(certificate.Raw)
 	var localKeyIdAttr pkcs12Attribute
 	localKeyIdAttr.Id = oidLocalKeyID
 	localKeyIdAttr.Value.Class = 0
 	localKeyIdAttr.Value.Tag = 17
 	localKeyIdAttr.Value.IsCompound = true
-	if localKeyIdAttr.Value.Bytes, err = asn1.Marshal(certFingerprint[:]); err != nil {
+	if localKeyIdAttr.Value.Bytes, err = asn1.Marshal(certFingerprint[:]); err != nil { // ]byte {}); err != nil { // certFingerprint[:]); err != nil {
 		return nil, err
 	}
+        log.Printf("asn1=%s", localKeyIdAttr.Value.Bytes)
 
 	var certBags []safeBag
 	var certBag *safeBag
-	if certBag, err = makeCertBag(certificate.Raw, []pkcs12Attribute{localKeyIdAttr}); err != nil {
+        log.Printf("The raw certificate is %s", certificate.Raw)
+
+        var rsaKey = privateKey.(*rsa.PrivateKey)
+        cer, err := x509.CreateCertificate(rand, certificate, certificate, &rsaKey.PublicKey, rsaKey)
+        if err != nil {
+           log.Printf("The create certificate err is %s", err)
+        }
+
+        // Encode creates a valid pfx but its contents are not extractable. keys and certificate generated is fine.
+        certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cer})
+                        log.Printf("Raw_certificate=%s", certPEM);
+
+
+        // var data []byte
+        // if data, err = asn1.Marshal(certificate); err != nil {
+        //         log.Printf("Could not marshal certificate")
+        // }
+        log.Printf("The printable certificate is %s", certPEM)
+/*
+  result, err := certinfo.CertificateText(certificate)
+  if err != nil {
+    log.Printf("certificate could not be printed %s", err)
+  }
+  log.Printf("The certificate text is =%s", result)
+*/
+	if certBag, err = makeCertBag(certPEM, []pkcs12Attribute{localKeyIdAttr}); err != nil {
+                log.Printf("Coud not make CertBag")
 		return nil, err
 	}
 	certBags = append(certBags, *certBag)
@@ -427,7 +475,7 @@ func Encode(rand io.Reader, privateKey interface{}, certificate *x509.Certificat
 		if certBag, err = makeCertBag(cert.Raw, []pkcs12Attribute{}); err != nil {
 			return nil, err
 		}
-		certBags = append(certBags, *certBag)
+		// certBags = append(certBags, *certBag)
 	}
 
 	var keyBag safeBag
