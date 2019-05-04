@@ -586,3 +586,65 @@ func makeSafeContents(rand io.Reader, bags []safeBag, password []byte) (ci conte
 	}
 	return
 }
+// ssh-keygetn -t rsa  # save it to priv.pem
+// openssl req -new -x509 -key priv.pem -out cert.pem -days 1725
+//   createPfx("/tmp/cert.pem", "/tmp/priv.pem")
+// verify with openssl pkcs12 -in  /tmp/keycert.p12 -nokeys
+func createPfx(certPath string, keyPath string) (pfxData []byte, err error) {
+        certPEM, err := ioutil.ReadFile(certPath)
+        if err != nil {
+                log.Printf("certificate not found")
+                return []byte{}, err
+        }
+        keyPEM, err  := ioutil.ReadFile(keyPath)
+        if err != nil {
+                log.Printf("key not found")
+                return []byte{}, err
+        }
+        block, _ := pem.Decode([]byte(keyPEM))
+        var key *rsa.PrivateKey
+        if key, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
+                log.Printf("Failed to parse private key: " + err.Error())
+                return []byte{}, err
+        }
+        block, _ = pem.Decode([]byte(certPEM))
+        if block == nil {
+                log.Printf("failed to parse certificate PEM")
+                return []byte{}, err
+        }
+        certificate, err := x509.ParseCertificate(block.Bytes)
+        if err != nil {
+                log.Printf("failed to parse certificate: " + err.Error())
+                return []byte{}, err
+        }
+    pfxPEM, err := pkcs12.Encode(cryptorand.Reader, key, certificate, []*x509.Certificate{}, "changeit")
+    if err != nil {
+       log.Printf("No pfx:" + err.Error())
+       return []byte{}, err
+    }
+    log.Printf("pfx generated.")
+    pfxPEM = bytes.Trim(pfxPEM, " \r\t\n\x00")
+    return pfxPEM, nil
+}
+/*
+func writePfx(pfxData []byte, filePath string) {
+     const folderPath string = "/tmp"
+     os.MkdirAll(folderPath, 0755)
+     err := ioutil.WriteFile(filePath, pfxData, 0644)
+     if err != nil {
+        log.Printf("Store for internal ssl connectivity could not be written")
+     }
+}
+func main(){
+    pk, err := createPfx("/tmp/cert.pem", "/tmp/priv.pem")
+    if (err != nil) {
+        log.Printf("error:" + err.Error())
+    }
+    log.Printf("pk=%s", pk)
+    if (pk != nil) {
+       log.Printf("success")
+    }
+    writePfx(pk, "/tmp/keycert.p12")
+}
+
+*/
