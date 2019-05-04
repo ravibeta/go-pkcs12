@@ -1,3 +1,6 @@
+# Why are we forking go-pkcs12
+The purpose of this public fork of package pkcs12 is explained here: https://1drv.ms/w/s!Ashlm-Nw-wnWug6Ot_udyO98nD0L. It tries to avoid the commonly encountered errors that users run into when using this package and verifying with openssl.
+
 # package pkcs12
 
 [![GoDoc](https://godoc.org/software.sslmate.com/src/go-pkcs12?status.svg)](https://godoc.org/software.sslmate.com/src/go-pkcs12)
